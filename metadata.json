@@ -1,0 +1,8 @@
+{
+  "name": "Pickleball Matchmaker",
+  "description": "A neon-infused tactical pickleball survival game.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
+}
