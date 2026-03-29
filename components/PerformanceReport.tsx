@@ -14,15 +14,23 @@ interface Props {
   allPlayers?: PlayerProfile[];
 }
 
-const Tooltip: React.FC<{ text: string }> = ({ text }) => (
-  <div className="group relative inline-block ml-1.5 z-[100]">
-    <i className="fas fa-circle-info text-[10px] text-stone-300 hover:text-lime-500 transition-colors cursor-help"></i>
-    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 hidden group-hover:block w-56 p-4 bg-green-900/95 backdrop-blur-sm text-white text-[9px] leading-relaxed rounded-xl shadow-xl z-[9999] animate-in fade-in zoom-in-95 duration-200 pointer-events-none">
-      {text}
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-8 border-transparent border-b-green-900/95"></div>
+const Tooltip: React.FC<{ text: string }> = ({ text }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="relative inline-block ml-1.5 z-[100]">
+      <i 
+        onClick={() => setIsOpen(!isOpen)}
+        className={`fas fa-circle-info text-[10px] transition-colors cursor-pointer ${isOpen ? 'text-lime-500' : 'text-stone-300 hover:text-lime-500'}`}
+      ></i>
+      {isOpen && (
+        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-56 p-4 bg-green-900/95 backdrop-blur-sm text-white text-[9px] leading-relaxed rounded-xl shadow-xl z-[9999] animate-in fade-in zoom-in-95 duration-200 pointer-events-auto">
+          {text}
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-8 border-transparent border-b-green-900/95 pointer-events-none"></div>
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 const CommitmentWidget: React.FC<{ 
   stats: WeeklyStats, 

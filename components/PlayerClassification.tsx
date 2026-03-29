@@ -31,17 +31,25 @@ interface TooltipProps {
   content: React.ReactNode;
 }
 
-const Tooltip: React.FC<TooltipProps> = ({ content }) => (
-  <div className="group relative inline-block ml-1 z-[50]">
-    <i className="fas fa-circle-info text-[10px] text-lime-400/40 hover:text-lime-400 transition-colors cursor-help"></i>
-    {/* Tooltip Popup */}
-    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block w-72 p-4 bg-black/95 backdrop-blur-md text-white text-[10px] rounded-xl shadow-2xl border border-white/10 leading-relaxed font-medium tracking-normal">
-      {content}
-      {/* Arrow / Hover Bridge */}
-      <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-black/95"></div>
+const Tooltip: React.FC<TooltipProps> = ({ content }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="relative inline-block ml-1 z-[50]">
+      <i 
+        onClick={() => setIsOpen(!isOpen)}
+        className={`fas fa-circle-info text-[10px] transition-colors cursor-pointer ${isOpen ? 'text-lime-400' : 'text-lime-400/40 hover:text-lime-400'}`}
+      ></i>
+      {/* Tooltip Popup */}
+      {isOpen && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-72 p-4 bg-black/95 backdrop-blur-md text-white text-[10px] rounded-xl shadow-2xl border border-white/10 leading-relaxed font-medium tracking-normal pointer-events-auto">
+          {content}
+          {/* Arrow / Hover Bridge */}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-black/95 pointer-events-none"></div>
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 type Point = { x: number, y: number };
 type Path = { points: Point[], color: string };

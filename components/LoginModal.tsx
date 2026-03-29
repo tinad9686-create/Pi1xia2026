@@ -29,15 +29,23 @@ const CORPORATE_ACCOUNTS: Record<string, string> = {
   'Coach': 'KitchenKing'
 };
 
-const Tooltip: React.FC<{ text: string }> = ({ text }) => (
-  <div className="group relative inline-block ml-1.5 z-40">
-    <i className="fas fa-circle-info text-[10px] text-stone-300 hover:text-lime-500 transition-colors cursor-help"></i>
-    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-64 p-3 bg-green-900 text-white text-[10px] rounded-xl shadow-xl z-50 animate-in fade-in zoom-in-95 duration-200 leading-relaxed font-medium pointer-events-none">
-      {text}
-      <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-green-900"></div>
+const Tooltip: React.FC<{ text: string }> = ({ text }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className="relative inline-block ml-1.5 z-40">
+      <i 
+        onClick={() => setIsOpen(!isOpen)}
+        className={`fas fa-circle-info text-[10px] transition-colors cursor-pointer ${isOpen ? 'text-lime-500' : 'text-stone-300 hover:text-lime-500'}`}
+      ></i>
+      {isOpen && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-green-900 text-white text-[10px] rounded-xl shadow-xl z-50 animate-in fade-in zoom-in-95 duration-200 leading-relaxed font-medium pointer-events-auto">
+          {text}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-green-900 pointer-events-none"></div>
+        </div>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 const LoginModal: React.FC<Props> = ({ mode, onLogin, onRegister, onClose, theme }) => {
   const [username, setUsername] = useState(''); // This will be email for users
@@ -125,7 +133,7 @@ const LoginModal: React.FC<Props> = ({ mode, onLogin, onRegister, onClose, theme
     setLoading(true);
 
     const actionCodeSettings = {
-      url: window.location.href,
+      url: 'https://ascepd.com',
       handleCodeInApp: true,
     };
 
