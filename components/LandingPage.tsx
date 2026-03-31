@@ -3,11 +3,19 @@ import React, { useState, useEffect } from 'react';
 import Logo from './Logo';
 import MilestoneCard from './MilestoneCard';
 import { SkillGroup } from '../types';
+import { collection, getCountFromServer } from 'firebase/firestore';
+import { db } from '../services/firebase';
+
 interface Props {
   onLaunchApp: () => void;
   onAdminLogin: () => void;
   onWatchDemo: () => void;
   onViewLegal: (tab: 'terms' | 'privacy' | 'waiver') => void;
+  stats?: {
+    registeredPlayers: number;
+    gamesBooked: number;
+    liveGames: number;
+  };
 }
 
 const RewardBadge: React.FC<{ text: string; icon: string; color: string }> = ({ text, icon, color }) => (
@@ -304,7 +312,33 @@ const GameMapSection = () => {
   );
 };
 
-const LandingPage: React.FC<Props> = ({ onLaunchApp, onAdminLogin, onWatchDemo, onViewLegal }) => {
+const LandingPage: React.FC<Props> = ({ onLaunchApp, onAdminLogin, onWatchDemo, onViewLegal, stats }) => {
+  const [fetchedStats, setFetchedStats] = useState({
+    registeredPlayers: 0,
+    gamesBooked: 0,
+    liveGames: 0
+  });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const usersSnapshot = await getCountFromServer(collection(db, 'users'));
+        const matchesSnapshot = await getCountFromServer(collection(db, 'matches'));
+        
+        setFetchedStats({
+          registeredPlayers: usersSnapshot.data().count,
+          gamesBooked: matchesSnapshot.data().count,
+          liveGames: 0
+        });
+      } catch (error) {
+        console.error("Failed to fetch stats:", error);
+      }
+    };
+    fetchStats();
+  }, []);
+
+  const displayStats = stats || fetchedStats;
+
   return (
     <div className="min-h-screen bg-[#F2E9E1] font-['Plus_Jakarta_Sans'] text-[#4A4238] overflow-x-hidden selection:bg-lime-400 selection:text-green-900">
       {/* Navbar */}
@@ -515,7 +549,7 @@ const LandingPage: React.FC<Props> = ({ onLaunchApp, onAdminLogin, onWatchDemo, 
                        <i className="fas fa-users"></i>
                     </div>
                     <div>
-                       <div className="text-2xl md:text-3xl font-black text-white leading-none">1,240+</div>
+                       <div className="text-2xl md:text-3xl font-black text-white leading-none">{displayStats.registeredPlayers}</div>
                        <div className="text-[8px] md:text-[10px] font-bold uppercase tracking-widest text-stone-500 mt-1">Registered Players</div>
                     </div>
                  </div>
@@ -527,7 +561,7 @@ const LandingPage: React.FC<Props> = ({ onLaunchApp, onAdminLogin, onWatchDemo, 
                        <i className="fas fa-calendar-check"></i>
                     </div>
                     <div>
-                       <div className="text-2xl md:text-3xl font-black text-white leading-none">85+</div>
+                       <div className="text-2xl md:text-3xl font-black text-white leading-none">{displayStats.gamesBooked}</div>
                        <div className="text-[8px] md:text-[10px] font-bold uppercase tracking-widest text-stone-500 mt-1">Games Booked</div>
                     </div>
                  </div>
@@ -539,7 +573,7 @@ const LandingPage: React.FC<Props> = ({ onLaunchApp, onAdminLogin, onWatchDemo, 
                        <i className="fas fa-circle-play"></i>
                     </div>
                     <div>
-                       <div className="text-2xl md:text-3xl font-black text-white leading-none">15</div>
+                       <div className="text-2xl md:text-3xl font-black text-white leading-none">{displayStats.liveGames}</div>
                        <div className="text-[8px] md:text-[10px] font-bold uppercase tracking-widest text-stone-500 mt-1">Live Games</div>
                     </div>
                  </div>

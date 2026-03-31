@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { PlayerProfile, Theme } from '../types';
+import { db, auth } from '../services/firebase';
+import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 interface Props {
   profile: PlayerProfile;
@@ -22,6 +24,37 @@ const MyAccount: React.FC<Props> = ({ profile, onEdit, onUpgrade, onLogout, them
 
   const isFree = profile.membershipTier === 'Free';
   const [confirmModal, setConfirmModal] = useState<{isOpen: boolean, message: string, onConfirm: () => void}>({ isOpen: false, message: '', onConfirm: () => {} });
+
+  const handleUnsubscribe = async () => {
+    try {
+      if (!auth.currentUser) return;
+      const user = auth.currentUser;
+      
+      // 1. Add to unsubscribed_users
+      await setDoc(doc(db, 'unsubscribed_users', user.uid), {
+        email: user.email || profile.email,
+        phone: user.phoneNumber || profile.phone || '',
+        unsubscribedAt: new Date().toISOString()
+      });
+
+      // 2. Delete from users collection
+      await deleteDoc(doc(db, 'users', user.uid));
+
+      // 3. Try to delete the auth user (may fail if requires recent login)
+      try {
+        await user.delete();
+      } catch (e) {
+        console.warn("Could not delete auth user, signing out instead", e);
+      }
+
+      // 4. Close modal and logout
+      setShowUnsubscribeModal(false);
+      onLogout();
+    } catch (error) {
+      console.error("Error unsubscribing:", error);
+      alert("There was an error unsubscribing. Please try again.");
+    }
+  };
 
   const handlePremiumClick = (featureName: string) => {
     if (isFree) {
@@ -390,10 +423,7 @@ const MyAccount: React.FC<Props> = ({ profile, onEdit, onUpgrade, onLogout, them
                 Cancel
               </button>
               <button 
-                onClick={() => {
-                  setShowUnsubscribeModal(false);
-                  onLogout();
-                }}
+                onClick={handleUnsubscribe}
                 className="flex-1 py-4 rounded-2xl bg-rose-600 text-white font-black uppercase tracking-widest text-[10px] hover:bg-rose-700 transition-colors shadow-lg shadow-rose-600/30"
               >
                 Unsubscribe

@@ -40,11 +40,20 @@ const AdminDashboard: React.FC<Props> = ({ onLogout, onLaunchApp, players, onCre
   const [selectedPlayerForSparks, setSelectedPlayerForSparks] = useState<PlayerProfile | null>(null);
   const [sparkAmount, setSparkAmount] = useState<number>(10);
   const [gameComments, setGameComments] = useState<any[]>([]);
+  const [unsubscribedUsers, setUnsubscribedUsers] = useState<any[]>([]);
 
   useEffect(() => {
     const q = query(collection(db, 'game_comments'), orderBy('createdAt', 'desc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setGameComments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const q = query(collection(db, 'unsubscribed_users'), orderBy('unsubscribedAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setUnsubscribedUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
     return () => unsubscribe();
   }, []);
@@ -216,6 +225,9 @@ const AdminDashboard: React.FC<Props> = ({ onLogout, onLaunchApp, players, onCre
                   <button onClick={() => { setActiveView('game_feedback'); setAiInsight(null); }} className={`w-full text-left p-4 rounded-xl flex items-center gap-3 font-bold text-xs uppercase tracking-wider transition-all ${activeView === 'game_feedback' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
                     <i className="fas fa-gamepad w-5"></i> Game Feedback
                   </button>
+                  <button onClick={() => { setActiveView('cancelled_members'); setAiInsight(null); }} className={`w-full text-left p-4 rounded-xl flex items-center gap-3 font-bold text-xs uppercase tracking-wider transition-all ${activeView === 'cancelled_members' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                    <i className="fas fa-user-slash w-5"></i> Cancelled Members
+                  </button>
                 </>
               )}
             </>
@@ -317,6 +329,50 @@ const AdminDashboard: React.FC<Props> = ({ onLogout, onLaunchApp, players, onCre
                         </div>
                       ))
                     )}
+                  </div>
+               </div>
+            </div>
+          )}
+
+           {/* CANCELLED MEMBERS VIEW */}
+          {activeView === 'cancelled_members' && activeRole === 'Director' && !isSoloMode && (
+            <div className="space-y-8">
+               <div className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100">
+                  <div className="flex justify-between items-center mb-6">
+                    <div>
+                      <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Cancelled Members</h2>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Unsubscribed Users List</p>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto admin-scroll pb-2">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
+                          <th className="pb-3 pl-2">Email</th>
+                          <th className="pb-3">Phone</th>
+                          <th className="pb-3">Unsubscribed At</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {unsubscribedUsers.length === 0 ? (
+                          <tr>
+                            <td colSpan={3} className="py-8 text-center text-slate-400 font-bold text-sm">
+                              No cancelled members found.
+                            </td>
+                          </tr>
+                        ) : (
+                          unsubscribedUsers.map(user => (
+                            <tr key={user.id} className="group hover:bg-slate-50/50 transition-colors">
+                              <td className="py-4 pl-2 font-bold text-xs text-slate-800">{user.email || 'N/A'}</td>
+                              <td className="py-4 font-bold text-xs text-slate-700">{user.phone || 'N/A'}</td>
+                              <td className="py-4 font-bold text-[10px] text-slate-400 uppercase tracking-widest">
+                                {new Date(user.unsubscribedAt).toLocaleString()}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                </div>
             </div>

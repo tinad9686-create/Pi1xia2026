@@ -41,6 +41,16 @@
         "userName": { "type": "string", "description": "Optional user name if logged in" }
       },
       "required": ["text", "createdAt"]
+    },
+    "UnsubscribedUser": {
+      "title": "Unsubscribed User",
+      "description": "Stores emails and phone numbers of users who have unsubscribed.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "unsubscribedAt": { "type": "string", "format": "date-time" }
+      }
     }
   },
   "firestore": {
@@ -55,6 +65,10 @@
     "/game_comments/{commentId}": {
       "schema": "GameComment",
       "description": "Comments on the game"
+    },
+    "/unsubscribed_users/{docId}": {
+      "schema": "UnsubscribedUser",
+      "description": "List of unsubscribed users"
     }
   }
 }

@@ -393,6 +393,31 @@ const RegistrationModal: React.FC<Props> = ({ profile, onUpdate, onClose, onView
       const user = auth.currentUser;
       if (!user) throw new Error("Authentication required");
 
+      if (selectedPlan === 'free') {
+        const emailToCheck = user.email || tempProfile.email;
+        const phoneToCheck = user.phoneNumber || tempProfile.phone;
+
+        let isUnsubscribed = false;
+
+        if (emailToCheck) {
+          const qEmail = query(collection(db, 'unsubscribed_users'), where('email', '==', emailToCheck));
+          const snapEmail = await getDocs(qEmail);
+          if (!snapEmail.empty) isUnsubscribed = true;
+        }
+
+        if (!isUnsubscribed && phoneToCheck) {
+          const qPhone = query(collection(db, 'unsubscribed_users'), where('phone', '==', phoneToCheck));
+          const snapPhone = await getDocs(qPhone);
+          if (!snapPhone.empty) isUnsubscribed = true;
+        }
+
+        if (isUnsubscribed) {
+          setPaymentLoading(false);
+          alert("You have previously unsubscribed and cannot register as a free member again. Please select a paid plan.");
+          return;
+        }
+      }
+
       // Generate playerTag if missing
       let playerTag = tempProfile.playerTag || generatedPlayerTag;
 
