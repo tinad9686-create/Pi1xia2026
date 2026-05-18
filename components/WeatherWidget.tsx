@@ -11,26 +11,78 @@ const WeatherWidget: React.FC<Props> = ({ location }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const conditions = ['Sunny', 'Partly Cloudy', 'Clear Skies', 'Sunny', 'Light Breeze', 'Sunny', 'Partly Cloudy'];
-    const icons = ['fa-sun', 'fa-cloud-sun', 'fa-wind', 'fa-sun', 'fa-leaf', 'fa-sun', 'fa-cloud-sun'];
-    
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const today = new Date().getDay();
-    
-    // Use location string to seed random values for variety
-    const seed = location ? location.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) : 0;
-    
-    const mockWeather: WeatherData[] = Array.from({ length: 7 }).map((_, i) => ({
-      day: days[(today + i) % 7],
-      temp: 68 + (seed % 10) + Math.floor(Math.random() * 5),
-      condition: conditions[(i + (seed % 3)) % conditions.length],
-      icon: icons[(i + (seed % 3)) % icons.length],
-    }));
+    const fetchWeather = async () => {
+      try {
+        let lat = 37.3394; // Default to San Jose somewhere if all else fails
+        let lon = -121.8950;
+        
+        if (location) {
+          const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1`);
+          const geoData = await geoRes.json();
+          if (geoData.results && geoData.results.length > 0) {
+            lat = geoData.results[0].latitude;
+            lon = geoData.results[0].longitude;
+          }
+        }
 
-    setTimeout(() => {
-      setWeather(mockWeather);
-      setLoading(false);
-    }, 800);
+        const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,weathercode&temperature_unit=fahrenheit&timezone=auto`);
+        const weatherData = await weatherRes.json();
+
+        if (weatherData.daily) {
+          const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          
+          const newWeather: WeatherData[] = weatherData.daily.time.map((dateStr: string, i: number) => {
+            const date = new Date(dateStr + "T00:00:00"); // Ensure local timezone parsed properly for day of week
+            const dayStr = days[date.getDay()];
+            const temp = Math.round(weatherData.daily.temperature_2m_max[i]);
+            const code = weatherData.daily.weathercode[i];
+
+            let condition = 'Clear';
+            let icon = 'fa-sun';
+
+            if (code === 0) { condition = 'Sunny'; icon = 'fa-sun'; }
+            else if (code === 1 || code === 2) { condition = 'Partly Cloudy'; icon = 'fa-cloud-sun'; }
+            else if (code === 3) { condition = 'Cloudy'; icon = 'fa-cloud'; }
+            else if (code === 45 || code === 48) { condition = 'Fog'; icon = 'fa-smog'; }
+            else if (code >= 51 && code <= 57) { condition = 'Drizzle'; icon = 'fa-cloud-rain'; }
+            else if (code >= 61 && code <= 67) { condition = 'Rain'; icon = 'fa-cloud-showers-heavy'; }
+            else if (code >= 71 && code <= 77) { condition = 'Snow'; icon = 'fa-snowflake'; }
+            else if (code >= 80 && code <= 82) { condition = 'Showers'; icon = 'fa-cloud-showers-heavy'; }
+            else if (code >= 85 && code <= 86) { condition = 'Snow'; icon = 'fa-snowflake'; }
+            else if (code >= 95) { condition = 'Storm'; icon = 'fa-bolt'; }
+
+            return {
+              day: dayStr,
+              temp,
+              condition,
+              icon
+            };
+          });
+          
+          setWeather(newWeather);
+        }
+      } catch (error) {
+        console.error("Failed to fetch weather data", error);
+        // Fallback to mock data on error so it doesn't break
+        const conditions = ['Sunny', 'Partly Cloudy', 'Clear Skies', 'Sunny', 'Light Breeze', 'Sunny', 'Partly Cloudy'];
+        const icons = ['fa-sun', 'fa-cloud-sun', 'fa-wind', 'fa-sun', 'fa-leaf', 'fa-sun', 'fa-cloud-sun'];
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const today = new Date().getDay();
+        const seed = location ? location.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) : 0;
+        
+        const mockWeather: WeatherData[] = Array.from({ length: 7 }).map((_, i) => ({
+          day: days[(today + i) % 7],
+          temp: 68 + (seed % 10) + Math.floor(Math.random() * 5),
+          condition: conditions[(i + (seed % 3)) % conditions.length],
+          icon: icons[(i + (seed % 3)) % icons.length],
+        }));
+        setWeather(mockWeather);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWeather();
   }, [location]);
 
   const iconColors = ['text-yellow-500', 'text-blue-400', 'text-teal-400', 'text-yellow-500', 'text-green-400', 'text-yellow-500', 'text-blue-400'];
