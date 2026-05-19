@@ -542,7 +542,7 @@ const LandingPage: React.FC<Props> = ({ onLaunchApp, onAdminLogin, onWatchDemo, 
       {/* Footer */}
       <footer className="bg-stone-900 text-stone-400 pt-16 md:pt-20 pb-8 px-6 border-t border-stone-800 relative z-0">
         <div className="max-w-6xl mx-auto">
-            {/* Stats Row - Strictly Horizontal */}
+            {/* Stats Row - Strictly Horizontal - Hidden for now 
             <div className="flex flex-row flex-wrap justify-center items-center gap-8 md:gap-16 mb-12 md:mb-16 border-b border-stone-800 pb-12 md:pb-16">
                  <div className="flex items-center gap-3 md:gap-4">
                     <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-stone-800 text-blue-500 flex items-center justify-center text-lg md:text-xl shrink-0">
@@ -578,6 +578,7 @@ const LandingPage: React.FC<Props> = ({ onLaunchApp, onAdminLogin, onWatchDemo, 
                     </div>
                  </div>
             </div>
+            */}
 
             <div className="flex flex-col md:flex-row justify-between items-center gap-8">
               <div className="flex flex-col items-center md:items-start gap-2">
