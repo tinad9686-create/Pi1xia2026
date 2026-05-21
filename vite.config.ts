@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
     define: {
       // Expose API_KEY to the client as process.env.API_KEY
       'process.env.API_KEY': JSON.stringify(env.API_KEY),
+      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.VITE_FIREBASE_API_KEY': JSON.stringify(env.apiKey),
       'process.env.VITE_FIREBASE_AUTH_DOMAIN': JSON.stringify(env.authDomain),
       'process.env.VITE_FIREBASE_PROJECT_ID': JSON.stringify(env.projectId),

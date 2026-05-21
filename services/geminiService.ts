@@ -1,23 +1,49 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { PlayerProfile, SkillGroup, ClassificationResult, PerformanceReport, MatchHistory, HotSession, DriveAnalysisResult } from "../types";
 
-// Define the genAI client for specific model calls if needed, using the unified key
-let genAI: GoogleGenAI | null = null;
+// We wrap the API call to our Next/Express backend to avoid browser Referrer API key blocks.
 const getGenAI = () => {
-  if (!genAI) {
-    const key = process.env.API_KEY || process.env.GEMINI_API_KEY;
-    if (key) {
-      genAI = new GoogleGenAI({ apiKey: key });
-    } else {
-      throw new Error("API key must be set");
+  return {
+    models: {
+      generateContent: async (params: { model: string, contents: any, config?: any }) => {
+        const response = await fetch('/api/generateContent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params)
+        });
+        
+        let data;
+        const text = await response.text();
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          throw new Error(response.ok ? "Invalid JSON from server" : text);
+        }
+        
+        if (!response.ok) {
+          throw new Error(data?.error?.message || data?.error || text || "Generation failed");
+        }
+        
+        // Add a .text property to mimic the SDK's response
+        if (data && data.candidates && data.candidates.length > 0 && data.candidates[0].content && data.candidates[0].content.parts) {
+          let text = '';
+          for (const part of data.candidates[0].content.parts) {
+            if (part.text) text += part.text;
+          }
+          data.text = text;
+        } else {
+          data.text = '';
+        }
+        
+        return data;
+      }
     }
-  }
-  return genAI;
+  };
 };
 
 export const analyzeDrive = async (
   mediaData: { data: string; mimeType: string },
-  modelId: string = 'gemini-3-pro-preview'
+  modelId: string = 'gemini-2.5-flash'
 ): Promise<DriveAnalysisResult> => {
   const parts: any[] = [
     { text: `Act as an expert USAPA-certified Pickleball Pro and technical video analyst. Perform a deep evaluation of a player's drive shot based on the provided video.
@@ -105,7 +131,7 @@ export const classifyPlayer = async (
   duprRank: number,
   yearsPlayed: number,
   mediaData?: { data: string; mimeType: string },
-  modelId: string = 'gemini-3-pro-preview'
+  modelId: string = 'gemini-2.5-flash'
 ): Promise<ClassificationResult> => {
   const parts: any[] = [
     { text: `Act as an expert USAPA-certified Pickleball Pro and technical video analyst. Perform a deep evaluation of the player based on the following multi-modal inputs:
@@ -199,7 +225,7 @@ export const generateAvatarStyle = async (
   imageBase64: string,
   style: 'cartoon'
 ): Promise<string> => {
-  const modelId = 'gemini-3.1-flash-image-preview';
+  const modelId = 'gemini-2.5-flash';
   
   const prompt = "Convert this portrait into a flat vector art avatar, vibrant colors, clean lines, white background, Disney/Pixar style. Professional character design.";
 
@@ -251,7 +277,7 @@ export const findPartners = async (
   candidates: PlayerProfile[]
 ): Promise<any> => {
   const response = await getGenAI().models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-flash',
     contents: `Find the best partners for this user: ${JSON.stringify(user)} based on these candidates: ${JSON.stringify(candidates)}.
       
       CRITERIA:
@@ -322,7 +348,7 @@ export const generateGreetingMessage = async (
   const timeStr = slot ? slot.time : "the usual time";
 
   const response = await getGenAI().models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-flash',
     contents: `Write a short, friendly, and funny pickleball invitation message from ${user.name} to ${partner.name}.
       
       MANDATORY TEMPLATE (Adjust to feel natural but keep the core info):
@@ -341,7 +367,7 @@ export const generateGreetingMessage = async (
 
 export const extractSessionDetails = async (conversation: string, user: PlayerProfile): Promise<Partial<HotSession> | null> => {
   const response = await getGenAI().models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-flash',
     contents: `Analyze this pickleball conversation and extract session details: "${conversation}".
     Based on the user's profile: ${JSON.stringify(user)}.
     Extract:
@@ -383,7 +409,7 @@ export const generatePerformanceReport = async (
   history: MatchHistory[]
 ): Promise<PerformanceReport> => {
   const response = await getGenAI().models.generateContent({
-    model: 'gemini-3-pro-preview',
+    model: 'gemini-2.5-flash',
     contents: `Analyze this player’s historical match data: ${JSON.stringify(history)}.
       1. Generate a scores table including: date, game duration, score, location, opponent's level, opponent's age group, and key performance note.
       2. Create a summary of improvement highlighting trends in skill development (e.g., improved dinking consistency or serve accuracy).

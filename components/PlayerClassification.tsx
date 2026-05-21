@@ -1235,7 +1235,7 @@ const PlayerClassification: React.FC<Props> = ({ profile, onUpdate, onRequireAut
   // --- MODEL SELECTION LOGIC ---
   // Elite and Admin get Pro (Deep Reasoning), others get Flash (Fast)
   const isProModel = (profile.membershipTier === 'Elite' || profile.membershipTier === 'Kitchen King') || isAdmin;
-  const activeModelName = isProModel ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+  const activeModelName = isProModel ? 'gemini-2.5-flash' : 'gemini-2.5-flash';
   const displayModelName = isProModel ? 'Gemini Pro' : 'Gemini Flash';
 
   const runPoseDetection = async (base64: string) => {
@@ -1515,9 +1515,9 @@ const PlayerClassification: React.FC<Props> = ({ profile, onUpdate, onRequireAut
 
       onUpdate(updatedProfile);
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Classification failed. Please try again.");
+      alert("Classification failed: " + (error?.message || error) + ". Please try again.");
     } finally {
       setLoading(false);
     }
@@ -1891,8 +1891,8 @@ const PlayerClassification: React.FC<Props> = ({ profile, onUpdate, onRequireAut
                 <div className="bg-white p-8 rounded-[2.5rem] border border-stone-100 shadow-xl flex flex-col justify-center min-h-[300px]">
                   <h4 className="text-xs font-black uppercase tracking-[0.2em] text-stone-400 mb-6 text-center">Skill Analysis Radar</h4>
                   {result.radarStats ? (
-                    <div className="w-full h-full min-h-[220px]">
-                      <ResponsiveContainer width="100%" height="100%">
+                    <div className="w-full h-64 min-h-[250px]">
+                      <ResponsiveContainer width="100%" height="100%" minHeight={250}>
                         <RadarChart cx="50%" cy="50%" outerRadius="70%" data={[
                           { subject: 'Power', A: result.radarStats.power, fullMark: 100 },
                           { subject: 'Control', A: result.radarStats.control, fullMark: 100 },

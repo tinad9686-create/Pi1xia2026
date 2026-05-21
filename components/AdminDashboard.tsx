@@ -1,6 +1,5 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { PlayerProfile } from '../types';
@@ -18,17 +17,42 @@ interface Props {
 }
 
 // Lazy initialize Gemini
-let ai: GoogleGenAI | null = null;
 const getAi = () => {
-  if (!ai) {
-    const key = process.env.GEMINI_API_KEY || process.env.API_KEY;
-    if (key) {
-      ai = new GoogleGenAI({ apiKey: key });
-    } else {
-      throw new Error("API key must be set");
+  return {
+    models: {
+      generateContent: async (params: { model: string, contents: any, config?: any }) => {
+        const response = await fetch('/api/generateContent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params)
+        });
+        
+        let data;
+        const text = await response.text();
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          throw new Error(response.ok ? "Invalid JSON from server" : text);
+        }
+        
+        if (!response.ok) {
+          throw new Error(data?.error?.message || data?.error || text || "Generation failed");
+        }
+        
+        if (data && data.candidates && data.candidates.length > 0 && data.candidates[0].content && data.candidates[0].content.parts) {
+          let text = '';
+          for (const part of data.candidates[0].content.parts) {
+            if (part.text) text += part.text;
+          }
+          data.text = text;
+        } else {
+          data.text = '';
+        }
+        
+        return data;
+      }
     }
-  }
-  return ai;
+  };
 };
 
 const AdminDashboard: React.FC<Props> = ({ onLogout, onLaunchApp, players, onCreateGroupEvent, onUpdatePlayer }) => {
@@ -41,6 +65,13 @@ const AdminDashboard: React.FC<Props> = ({ onLogout, onLaunchApp, players, onCre
   const [sparkAmount, setSparkAmount] = useState<number>(10);
   const [gameComments, setGameComments] = useState<any[]>([]);
   const [unsubscribedUsers, setUnsubscribedUsers] = useState<any[]>([]);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  const handleNavClick = (view: string) => {
+    setActiveView(view);
+    setAiInsight(null);
+    setIsMobileMenuOpen(false);
+  };
 
   useEffect(() => {
     const q = query(collection(db, 'game_comments'), orderBy('createdAt', 'desc'));
@@ -127,7 +158,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout, onLaunchApp, players, onCre
         return;
       }
       const response = await aiClient.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-2.5-flash',
         contents: `Role: ${systemRole}. Context: ${promptContext}. Task: 1-sentence insight + 1 action.`
       });
       setAiInsight(response.text || "Analysis complete.");
@@ -170,7 +201,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout, onLaunchApp, players, onCre
     if (!canAccess(dept)) return null;
     return (
       <button 
-        onClick={() => { setActiveView(dept.toLowerCase()); setAiInsight(null); }}
+        onClick={() => handleNavClick(dept.toLowerCase())}
         className={`w-full text-left p-4 rounded-xl flex items-center gap-3 font-bold text-xs uppercase tracking-wider transition-all ${activeView === dept.toLowerCase() ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
       >
         <i className={`fas ${icon} w-5`}></i> {label}
@@ -180,8 +211,21 @@ const AdminDashboard: React.FC<Props> = ({ onLogout, onLaunchApp, players, onCre
 
   return (
     <div className="flex h-screen bg-slate-50 font-['Plus_Jakarta_Sans'] overflow-hidden">
-      <aside className="w-64 bg-slate-900 text-white flex flex-col shrink-0">
-        <div className="p-8 pb-4">
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 z-40 md:hidden backdrop-blur-sm transition-opacity"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900 text-white flex flex-col shrink-0 transform transition-transform duration-300 md:relative md:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-8 pb-4 relative">
+          <button 
+            className="md:hidden absolute top-4 right-4 text-slate-400 hover:text-white"
+            onClick={() => setIsMobileMenuOpen(false)}
+          >
+            <i className="fas fa-times text-xl"></i>
+          </button>
           <div className="flex items-center gap-2 mb-8">
             <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center"><i className="fas fa-building text-white text-sm"></i></div>
             <span className="font-black text-lg tracking-tight">ASCEP Design</span>
@@ -189,7 +233,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout, onLaunchApp, players, onCre
           <div className="mb-6 p-4 bg-slate-800 rounded-2xl border border-slate-700">
             <div className="flex items-center justify-between mb-2">
                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Operation Mode</span>
-               <div onClick={() => { setIsSoloMode(!isSoloMode); setActiveView('overview'); setAiInsight(null); }} className={`w-10 h-5 rounded-full relative cursor-pointer transition-colors ${isSoloMode ? 'bg-lime-500' : 'bg-slate-600'}`}>
+               <div onClick={() => { setIsSoloMode(!isSoloMode); handleNavClick('overview'); }} className={`w-10 h-5 rounded-full relative cursor-pointer transition-colors ${isSoloMode ? 'bg-lime-500' : 'bg-slate-600'}`}>
                  <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform ${isSoloMode ? 'translate-x-5' : ''}`}></div>
                </div>
             </div>
@@ -198,14 +242,14 @@ const AdminDashboard: React.FC<Props> = ({ onLogout, onLaunchApp, players, onCre
           {!isSoloMode && (
             <div className="mb-6">
               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 block">Impersonate Role</label>
-              <select value={activeRole} onChange={(e) => { setActiveRole(e.target.value as Department); setActiveView('overview'); setAiInsight(null); }} className="w-full bg-slate-800 text-white text-xs font-bold p-3 rounded-xl border border-slate-700 outline-none focus:border-indigo-500">
+              <select value={activeRole} onChange={(e) => { setActiveRole(e.target.value as Department); handleNavClick('overview'); }} className="w-full bg-slate-800 text-white text-xs font-bold p-3 rounded-xl border border-slate-700 outline-none focus:border-indigo-500">
                 <option value="Director">Director</option><option value="Finance">Finance Dept</option><option value="Marketing">Marketing Dept</option><option value="Education">Education Dept</option><option value="Support">Tech Support</option><option value="System">System Admin</option>
               </select>
             </div>
           )}
         </div>
         <nav className="flex-1 px-4 space-y-2 overflow-y-auto">
-          <button onClick={() => { setActiveView('overview'); setAiInsight(null); }} className={`w-full text-left p-4 rounded-xl flex items-center gap-3 font-bold text-xs uppercase tracking-wider transition-all ${activeView === 'overview' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+          <button onClick={() => handleNavClick('overview')} className={`w-full text-left p-4 rounded-xl flex items-center gap-3 font-bold text-xs uppercase tracking-wider transition-all ${activeView === 'overview' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
             <i className={`fas ${isSoloMode ? 'fa-clipboard-list' : 'fa-home'} w-5`}></i> {isSoloMode ? 'Morning Briefing' : 'Dashboard'}
           </button>
           {!isSoloMode && (
@@ -219,13 +263,13 @@ const AdminDashboard: React.FC<Props> = ({ onLogout, onLaunchApp, players, onCre
               {renderSidebarItem('System', 'fa-server', 'System & Hosting')}
               {activeRole === 'Director' && (
                 <>
-                  <button onClick={() => { setActiveView('clients'); setAiInsight(null); }} className={`w-full text-left p-4 rounded-xl flex items-center gap-3 font-bold text-xs uppercase tracking-wider transition-all ${activeView === 'clients' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                  <button onClick={() => handleNavClick('clients')} className={`w-full text-left p-4 rounded-xl flex items-center gap-3 font-bold text-xs uppercase tracking-wider transition-all ${activeView === 'clients' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
                     <i className="fas fa-users w-5"></i> Client List
                   </button>
-                  <button onClick={() => { setActiveView('game_feedback'); setAiInsight(null); }} className={`w-full text-left p-4 rounded-xl flex items-center gap-3 font-bold text-xs uppercase tracking-wider transition-all ${activeView === 'game_feedback' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                  <button onClick={() => handleNavClick('game_feedback')} className={`w-full text-left p-4 rounded-xl flex items-center gap-3 font-bold text-xs uppercase tracking-wider transition-all ${activeView === 'game_feedback' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
                     <i className="fas fa-gamepad w-5"></i> Game Feedback
                   </button>
-                  <button onClick={() => { setActiveView('cancelled_members'); setAiInsight(null); }} className={`w-full text-left p-4 rounded-xl flex items-center gap-3 font-bold text-xs uppercase tracking-wider transition-all ${activeView === 'cancelled_members' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                  <button onClick={() => handleNavClick('cancelled_members')} className={`w-full text-left p-4 rounded-xl flex items-center gap-3 font-bold text-xs uppercase tracking-wider transition-all ${activeView === 'cancelled_members' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
                     <i className="fas fa-user-slash w-5"></i> Cancelled Members
                   </button>
                 </>
@@ -239,10 +283,21 @@ const AdminDashboard: React.FC<Props> = ({ onLogout, onLaunchApp, players, onCre
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-8 lg:p-12 relative">
-        <header className="flex justify-between items-center mb-12">
-          <div><h1 className="text-3xl font-black text-slate-800 mb-1">{isSoloMode ? 'Good Morning, Founder' : (activeView === 'overview' ? `Welcome back, ${activeRole}` : activeView.charAt(0).toUpperCase() + activeView.slice(1))}</h1><p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{new Date().toDateString()} • System Status: <span className="text-emerald-500">Online</span></p></div>
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 relative w-full">
+        <header className="flex justify-between items-center mb-12 gap-4">
           <div className="flex items-center gap-4">
+            <button 
+              className="md:hidden p-2 text-slate-500 hover:text-slate-800 rounded-lg bg-white shadow-sm border border-slate-200 shrink-0"
+              onClick={() => setIsMobileMenuOpen(true)}
+            >
+              <i className="fas fa-bars text-xl"></i>
+            </button>
+            <div>
+              <h1 className="text-xl md:text-3xl font-black text-slate-800 mb-1">{isSoloMode ? 'Good Morning, Founder' : (activeView === 'overview' ? `Welcome back, ${activeRole}` : activeView.charAt(0).toUpperCase() + activeView.slice(1))}</h1>
+              <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest">{new Date().toDateString()} <span className="hidden md:inline">• System Status: <span className="text-emerald-500">Online</span></span></p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 shrink-0">
             <div className="text-right hidden md:block"><div className="text-sm font-black text-slate-800">{isSoloMode ? 'One-Man Army' : 'Administrator'}</div><div className="text-[10px] font-bold text-slate-400 uppercase">{isSoloMode ? 'Full Access' : `${activeRole} Permissions`}</div></div>
             <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white border-2 border-white/50 shadow-lg ${isSoloMode ? 'bg-lime-500' : 'bg-indigo-600'}`}><i className={`fas ${isSoloMode ? 'fa-rocket' : 'fa-user-tie'}`}></i></div>
           </div>
@@ -271,7 +326,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout, onLaunchApp, players, onCre
                     <button onClick={exportClientsToCSV} className="bg-indigo-600 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase tracking-widest hover:bg-indigo-500 transition-colors flex items-center gap-2"><i className="fas fa-file-csv"></i> Export</button>
                   </div>
                   <div className="overflow-x-auto admin-scroll pb-2">
-                    <table className="w-full text-left">
+                    <table className="w-full text-left min-w-[800px]">
                       <thead><tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100"><th className="pb-3 pl-2">Client</th><th className="pb-3">Contact</th><th className="pb-3">Location & Tier</th><th className="pb-3 text-center">Stats</th><th className="pb-3 text-right">Actions</th></tr></thead>
                       <tbody className="divide-y divide-slate-50">
                         {players.map(p => (
@@ -345,7 +400,7 @@ const AdminDashboard: React.FC<Props> = ({ onLogout, onLaunchApp, players, onCre
                     </div>
                   </div>
                   <div className="overflow-x-auto admin-scroll pb-2">
-                    <table className="w-full text-left">
+                    <table className="w-full text-left min-w-[600px]">
                       <thead>
                         <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">
                           <th className="pb-3 pl-2">Email</th>
