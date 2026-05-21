@@ -4,10 +4,11 @@
 
 [functions]
   directory = "netlify/functions"
+  node_bundler = "esbuild"
 
 [[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/api/api/:splat"
+  from = "/api/generateContent"
+  to = "/.netlify/functions/generateContent"
   status = 200
 
 [[redirects]]
