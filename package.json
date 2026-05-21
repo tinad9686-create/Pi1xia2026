@@ -29,6 +29,7 @@
     "react-dom": "^19.2.3",
     "react-image-crop": "^11.0.10",
     "recharts": "^3.8.0",
+    "serverless-http": "^4.0.0",
     "twilio": "^5.12.2",
     "vite": "^7.3.1"
   },
