@@ -16,7 +16,7 @@ interface Props {
   onRequireAuth?: () => boolean;
   isAdmin?: boolean;
   allPlayers?: PlayerProfile[];
-  onDirectorBroadcast?: (day: number, time: string, text: string, location: string) => void;
+  onDirectorBroadcast?: (day: number, time: string, text: string, location: string, endTime?: string, eventType?: 'Standard' | 'Tournament' | 'Global Broadcast') => void;
   onDirectorConfirm?: (session: HotSession) => void;
   onDirectorDelete?: (session: HotSession) => void;
   onJoinHotSession?: (session: HotSession) => void;
@@ -100,8 +100,10 @@ const Matchmaking: React.FC<Props> = ({
 
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any[]>([]);
-  const [customMatch, setCustomMatch] = useState({ day: 0, time: '18:00', location: '' });
-  const [directorTargetCourt, setDirectorTargetCourt] = useState(availableCourts[0]);
+  const [customMatch, setCustomMatch] = useState<{day: number, time: string, endTime: string, location: string, eventType: 'Standard' | 'Tournament' | 'Global Broadcast'}>({ day: 0, time: '18:00', endTime: '20:00', location: '', eventType: 'Standard' });
+  const [directorTargetCourts, setDirectorTargetCourts] = useState<string[]>(['All']);
+  const [courtSelectOpenTop, setCourtSelectOpenTop] = useState(false);
+  const [courtSelectOpenBottom, setCourtSelectOpenBottom] = useState(false);
   const [promptModal, setPromptModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -131,18 +133,45 @@ const Matchmaking: React.FC<Props> = ({
   const handleDirectorCellClick = (day: number, time: string, session: HotSession | undefined) => {
       if (!isAdmin) return;
       if (session) {
+          const joinedPlayers = session.participants?.map(pid => allPlayers?.find(p => p.id === pid)?.name || 'Unknown player');
+          const namesStr = joinedPlayers && joinedPlayers.length > 0 ? joinedPlayers.join(', ') : 'No one yet';
+          
+          if (session.eventType === 'Global Broadcast' || session.eventType === 'Tournament') {
+              alert(`Event: ${session.description}\nType: ${session.eventType}\nJoined (${session.participants?.length || 0}):\n${namesStr}`);
+              return;
+          }
+
           if (!session.isManuallyConfirmed && onDirectorConfirm) {
-              onDirectorConfirm(session);
+              const proceed = window.confirm(`Confirm this standard session?\nJoined: ${namesStr}`);
+              if (proceed) onDirectorConfirm(session);
           } else {
-              alert("This session is already confirmed.");
+              alert(`This session is already confirmed.\nJoined: ${namesStr}`);
           }
       } else {
           setPromptModal({
             isOpen: true,
-            title: `Enter broadcast message for ${directorTargetCourt} at ${DAYS[day]} ${time}:`,
+            title: `Enter broadcast message for ${directorTargetCourts.join(', ')} at ${DAYS[day]} ${time}:`,
             value: '',
             onSubmit: (text) => {
-              if (text && text.trim() && onDirectorBroadcast) onDirectorBroadcast(day, time, text.trim(), directorTargetCourt);
+              if (text && text.trim() && onDirectorBroadcast) {
+                let conflictCount = 0;
+                allPlayers?.forEach(p => {
+                   p.schedule.forEach(s => {
+                      if (s.day === day && s.time === time) {
+                         if (directorTargetCourts.includes('All') || directorTargetCourts.some(c => c.toLowerCase().trim() === s.location.toLowerCase().trim())) {
+                            conflictCount++;
+                         }
+                      }
+                   });
+                });
+
+                if (conflictCount > 0) {
+                   const proceed = window.confirm(`Wait! ${conflictCount} players already scheduled a game here at ${time} on ${DAYS[day]}. Are you sure you want to create this Master Entry?`);
+                   if (!proceed) return;
+                }
+                
+                onDirectorBroadcast(day, time, text.trim(), directorTargetCourts.join(', '), undefined, 'Standard');
+              }
             }
           });
       }
@@ -153,7 +182,7 @@ const Matchmaking: React.FC<Props> = ({
     if (onRequireAuth && onRequireAuth()) return;
 
     // If there's a broadcast session, prioritize joining it
-    if (session) {
+    if (session && session.eventType !== 'Tournament' && session.eventType !== 'Global Broadcast') {
       if (onJoinHotSession) {
         onJoinHotSession(session);
       }
@@ -164,6 +193,17 @@ const Matchmaking: React.FC<Props> = ({
     let newSchedule = [...currentUser.schedule];
     if (existingIndex !== -1) {
       const match = newSchedule[existingIndex];
+      // Do not cycle standard play state if this is actually a joined tournament/global broadcast
+      if (match.id && hotSessions && hotSessions.some(hs => hs.id === match.id && (hs.eventType === 'Tournament' || hs.eventType === 'Global Broadcast'))) {
+          const leave = window.confirm("Leave this global event?");
+          if (leave) {
+            newSchedule.splice(existingIndex, 1);
+            onUpdate({ ...currentUser, schedule: newSchedule });
+            // Since this uses standard schedule matching logic, they'd still be in participants on hotSessions.
+            // A more complete implementation might call a specific "leave" callback, but this removes it from their view.
+          }
+          return;
+      }
       if (!match.status || match.status === 'preferred') {
          newSchedule[existingIndex] = { ...match, status: 'pending' as const, isConfirmedMatch: false };
       } else if (match.status === 'pending') {
@@ -172,8 +212,9 @@ const Matchmaking: React.FC<Props> = ({
          newSchedule.splice(existingIndex, 1);
       }
     } else {
+      let loc = currentUser.locations?.[0] || currentUser.location || 'Unknown';
       newSchedule.push({ 
-        id: Math.random().toString(36).substring(7), day, time, location: currentUser.location, 
+        id: Math.random().toString(36).substring(7), day, time, location: loc, 
         isConfirmedMatch: false, status: 'preferred' as const, duration: 2 
       });
     }
@@ -183,8 +224,25 @@ const Matchmaking: React.FC<Props> = ({
   const handleAddCustomMatch = () => {
     if (isAdmin) {
         if (!customMatch.location.trim()) { alert("Please enter the event text"); return; }
+        
+        let conflictCount = 0;
+        allPlayers?.forEach(p => {
+           p.schedule.forEach(s => {
+              if (s.day === customMatch.day && s.time === customMatch.time) {
+                 if (directorTargetCourts.includes('All') || directorTargetCourts.some(c => c.toLowerCase().trim() === s.location.toLowerCase().trim())) {
+                    conflictCount++;
+                 }
+              }
+           });
+        });
+
+        if (conflictCount > 0) {
+           const proceed = window.confirm(`Wait! ${conflictCount} players already scheduled a game here at ${customMatch.time} on ${DAYS[customMatch.day]}. Are you sure you want to create this Master Entry?`);
+           if (!proceed) return;
+        }
+
         if (onDirectorBroadcast) {
-            onDirectorBroadcast(customMatch.day, customMatch.time, customMatch.location, directorTargetCourt);
+            onDirectorBroadcast(customMatch.day, customMatch.time, customMatch.location, directorTargetCourts.join(', '), customMatch.endTime, customMatch.eventType);
             setCustomMatch({ ...customMatch, location: '' });
             alert("Master Entry Broadcasted!");
         }
@@ -287,32 +345,67 @@ const Matchmaking: React.FC<Props> = ({
             <div className="flex items-center justify-between mb-4 px-2">
                <h4 className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em]">{isAdmin ? 'Managing Schedule For:' : 'Your Weekly Planner'}</h4>
                {isAdmin ? (
-                  <select 
-                    value={directorTargetCourt} 
-                    onChange={e => {
-                      if (e.target.value === '__add_new__') {
-                        setPromptModal({
-                          isOpen: true,
-                          title: "Enter new court name:",
-                          value: '',
-                          onSubmit: (newCourt) => {
-                            if (newCourt && newCourt.trim()) {
-                              setDirectorTargetCourt(newCourt.trim());
-                            }
-                          }
-                        });
-                      } else {
-                        setDirectorTargetCourt(e.target.value);
-                      }
-                    }} 
-                    className="bg-indigo-50 border border-indigo-200 text-indigo-800 text-[10px] font-black uppercase rounded-lg px-2 py-1 outline-none"
-                  >
-                    {availableCourts.map(c => <option key={c} value={c}>{c}</option>)}
-                    {directorTargetCourt && !availableCourts.some(c => c.toLowerCase() === directorTargetCourt.toLowerCase()) && (
-                      <option value={directorTargetCourt}>{directorTargetCourt}</option>
-                    )}
-                    <option value="__add_new__">+ ADD NEW COURT...</option>
-                  </select>
+                  <div className="relative">
+                      <button 
+                         onClick={() => setCourtSelectOpenTop(!courtSelectOpenTop)}
+                         className="bg-indigo-50 border border-indigo-200 text-indigo-800 text-[10px] font-black uppercase rounded-lg px-2 py-1 outline-none min-w-[120px] text-left flex justify-between items-center"
+                      >
+                         <span className="truncate">{directorTargetCourts.length ? directorTargetCourts.join(', ') : 'Select Courts...'}</span>
+                         <i className="fas fa-chevron-down ml-2"></i>
+                      </button>
+                      
+                      {courtSelectOpenTop && (
+                          <div className="absolute top-full mt-1 left-0 w-48 bg-white border border-indigo-200 shadow-xl rounded-xl p-2 z-50 flex flex-col gap-1 max-h-48 overflow-y-auto">
+                              <label className="flex items-center gap-2 text-[10px] font-bold text-stone-700 cursor-pointer p-1 hover:bg-indigo-50 rounded">
+                                  <input type="checkbox" checked={directorTargetCourts.includes('All')} onChange={e => {
+                                      if (e.target.checked) setDirectorTargetCourts(['All']);
+                                      else setDirectorTargetCourts([]);
+                                  }} />
+                                  All Courts
+                              </label>
+                              {availableCourts.map(c => (
+                                  <label key={`top-${c}`} className="flex items-center gap-2 text-[10px] font-bold text-stone-700 cursor-pointer p-1 hover:bg-indigo-50 rounded">
+                                      <input type="checkbox" checked={directorTargetCourts.includes(c)} onChange={e => {
+                                          let next = [...directorTargetCourts];
+                                          if (next.includes('All')) next = [];
+                                          if (e.target.checked) next.push(c);
+                                          else next = next.filter(x => x !== c);
+                                          if (next.length === 0) next = ['All'];
+                                          setDirectorTargetCourts(next);
+                                      }} />
+                                      {c}
+                                  </label>
+                              ))}
+                              {directorTargetCourts.filter(c => c !== 'All' && !availableCourts.includes(c)).map(c => (
+                                  <label key={`top-custom-${c}`} className="flex items-center gap-2 text-[10px] font-bold text-stone-700 cursor-pointer p-1 hover:bg-indigo-50 rounded">
+                                      <input type="checkbox" checked={directorTargetCourts.includes(c)} onChange={e => {
+                                          let next = directorTargetCourts.filter(x => x !== c);
+                                          if (next.length === 0) next = ['All'];
+                                          setDirectorTargetCourts(next);
+                                      }} />
+                                      {c}
+                                  </label>
+                              ))}
+                              <button onClick={() => {
+                                   setPromptModal({
+                                      isOpen: true,
+                                      title: "Enter new court name:",
+                                      value: '',
+                                      onSubmit: (newCity) => {
+                                          if (newCity && newCity.trim()) {
+                                               const valid = newCity.trim();
+                                               let next = [...directorTargetCourts];
+                                               if (next.includes('All')) next = [];
+                                               if (!next.includes(valid)) next.push(valid);
+                                               setDirectorTargetCourts(next);
+                                          }
+                                      }
+                                  });
+                                  setCourtSelectOpenTop(false);
+                              }} className="text-left text-[10px] font-black text-indigo-500 hover:text-indigo-600 p-1 mt-1 border-t border-stone-100">+ ADD NEW COURT...</button>
+                          </div>
+                      )}
+                  </div>
                ) : (
                  <div className="flex flex-wrap items-center gap-2">
                      <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-lime-400"></div><span className="text-[8px] font-bold text-stone-400 uppercase">Available</span></div>
@@ -334,8 +427,14 @@ const Matchmaking: React.FC<Props> = ({
                        const broadcastSession = hotSessions.find(hs => {
                           const hsDay = dayMap[hs.day] ?? 0;
                           if (hsDay !== dayIdx || hs.time !== time) return false;
-                          if (isAdmin) return hs.location.trim().toLowerCase() === (directorTargetCourt || '').trim().toLowerCase();
-                          return currentUser.locations.some(l => l.trim().toLowerCase() === hs.location.trim().toLowerCase());
+                          if (isAdmin) {
+                              if (directorTargetCourts.includes('All')) return true;
+                              const hsLocs = hs.location.split(',').map(s => s.trim().toLowerCase());
+                              return directorTargetCourts.some(tc => hsLocs.includes(tc.toLowerCase()));
+                          }
+                          if (hs.eventType === 'Global Broadcast' || hs.eventType === 'Tournament') return true;
+                          if (hs.location === 'All') return true;
+                          return currentUser.locations.some(l => l.toLowerCase().includes(hs.location.toLowerCase()));
                        });
                        const matches = currentUser.schedule.filter(s => s.day === dayIdx && s.time === time);
                        const match = matches.find(m => m.isConfirmedMatch) || matches[0];
@@ -354,11 +453,14 @@ const Matchmaking: React.FC<Props> = ({
 
                        let bgClass = 'bg-white border-stone-100 hover:border-lime-200';
                        if (match) {
-                           if (status === 'confirmed') bgClass = 'bg-emerald-500 border-emerald-600 text-white';
+                           const isTournament = match.id && hotSessions.some(hs => hs.id === match.id && (hs.eventType === 'Tournament' || hs.eventType === 'Global Broadcast'));
+                           if (isTournament) bgClass = 'bg-indigo-500 border-indigo-600 text-white';
+                           else if (status === 'confirmed') bgClass = 'bg-emerald-500 border-emerald-600 text-white';
                            else if (status === 'pending') bgClass = 'bg-orange-400 border-orange-500 text-white';
                            else bgClass = 'bg-lime-400 border-lime-500 text-green-900'; 
                        } else if (broadcastSession) {
-                          if (broadcastSession.isManuallyConfirmed || broadcastSession.needed <= 0) bgClass = 'bg-emerald-500 border-emerald-600 text-white';
+                          if (!isAdmin && (broadcastSession.eventType === 'Tournament' || broadcastSession.eventType === 'Global Broadcast')) bgClass = 'bg-white border-dashed border-stone-300 text-stone-500 hover:bg-stone-50';
+                          else if (broadcastSession.isManuallyConfirmed || broadcastSession.needed <= 0) bgClass = 'bg-emerald-500 border-emerald-600 text-white';
                           else bgClass = 'bg-orange-100 border-orange-300 text-orange-800'; 
                        }
                        return (
@@ -377,6 +479,11 @@ const Matchmaking: React.FC<Props> = ({
                               <div className="text-center w-full relative h-full flex flex-col items-center justify-center">
                                  <span className="text-[6px] font-black uppercase leading-tight line-clamp-2 w-full">{broadcastSession.description}</span>
                                  {broadcastSession.needed > 0 && <span className="text-[6px] font-bold block">Need {broadcastSession.needed}</span>}
+                                 {broadcastSession.participants && broadcastSession.participants.length > 0 && (
+                                     <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[6px] font-bold px-1 rounded-bl-lg shadow-sm">
+                                         {broadcastSession.participants.length}
+                                     </div>
+                                 )}
                                  <div 
                                    onClick={(e) => { e.stopPropagation(); onDirectorDelete?.(broadcastSession); }}
                                    className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full w-4 h-4 flex items-center justify-center hover:bg-rose-600 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
@@ -388,7 +495,11 @@ const Matchmaking: React.FC<Props> = ({
                               </div>
                            ) : match ? (
                               <div className="text-center w-full">
-                                 <span className="text-[7px] font-black uppercase leading-tight line-clamp-2 w-full">{match.location}</span>
+                                 <span className="text-[7px] font-black uppercase leading-tight line-clamp-2 w-full">
+                                    {(match.id && hotSessions?.some(hs => hs.id === match.id && (hs.eventType === 'Tournament' || hs.eventType === 'Global Broadcast'))) 
+                                       ? (hotSessions?.find(hs => hs.id === match.id)?.description || match.location)
+                                       : match.location}
+                                 </span>
                                  {match.participants && match.participants.length > 0 && status === 'pending' && (
                                    <div className="absolute top-0 right-0 bg-white text-orange-500 text-[6px] font-bold px-1 rounded-bl-lg shadow-sm">
                                      {match.participants.length}
@@ -398,12 +509,14 @@ const Matchmaking: React.FC<Props> = ({
                            ) : broadcastSession && !isAdmin ? (
                               <div className="text-center w-full">
                                  <span className="text-[6px] font-black uppercase leading-tight line-clamp-2 w-full">{broadcastSession.description || "Event"}</span>
-                                 <div className="flex items-center justify-center gap-1 mt-0.5">
-                                   <span className="text-[5px] font-bold uppercase opacity-70">{broadcastSession.isManuallyConfirmed ? "CONFIRMED" : "JOIN"}</span>
-                                   {broadcastSession.needed > 0 && (
-                                     <span className="text-[5px] font-black bg-orange-500 text-white px-1 rounded-full">{broadcastSession.needed}</span>
-                                   )}
-                                 </div>
+                                 {(broadcastSession.eventType !== 'Tournament' && broadcastSession.eventType !== 'Global Broadcast') ? (
+                                   <div className="flex items-center justify-center gap-1 mt-0.5">
+                                     <span className="text-[5px] font-bold uppercase opacity-70">{broadcastSession.isManuallyConfirmed ? "CONFIRMED" : "JOIN"}</span>
+                                     {broadcastSession.needed > 0 && (
+                                       <span className="text-[5px] font-black bg-orange-500 text-white px-1 rounded-full">{broadcastSession.needed}</span>
+                                     )}
+                                   </div>
+                                 ) : null}
                               </div>
                            ) : <span className={`opacity-0 group-hover:opacity-30 text-[8px] font-bold uppercase ${isAdmin ? 'text-indigo-400' : 'text-stone-400'}`}>{isAdmin ? 'Broadcast' : 'Add'}</span>}
                          </motion.button>
@@ -415,17 +528,93 @@ const Matchmaking: React.FC<Props> = ({
             </div>
             {(isPaidTier || isAdmin) && (
               <div className="mt-4 pt-4 border-t border-stone-200 animate-in slide-in-from-top-2">
-                 <div className="flex flex-col sm:flex-row items-center gap-3 bg-yellow-50 p-3 rounded-2xl border border-yellow-100">
-                    <div className="flex items-center gap-2 px-2 shrink-0">
+                 <div className="flex flex-col xl:flex-row items-center gap-3 bg-yellow-50 p-3 rounded-2xl border border-yellow-100">
+                    <div className="flex items-center gap-2 px-2 shrink-0 w-full xl:w-auto justify-center xl:justify-start">
                        <i className={`fas ${isAdmin ? 'fa-tower-broadcast' : 'fa-crown'} text-yellow-500 text-sm`}></i>
                        <span className="text-[10px] font-black text-yellow-700 uppercase tracking-widest">{isAdmin ? 'Master Entry' : 'Custom Entry'}</span>
                     </div>
-                    <div className="flex-1 flex gap-2 w-full">
+                    <div className="flex-1 flex flex-wrap items-center justify-center gap-2 w-full">
                        <select value={customMatch.day} onChange={e => setCustomMatch({...customMatch, day: parseInt(e.target.value)})} className="bg-white border border-yellow-200 rounded-xl px-2 py-2 text-[10px] font-bold text-stone-700 outline-none">{DAYS.map((d, i) => <option key={i} value={i}>{d}</option>)}</select>
-                       <select value={customMatch.time} onChange={e => setCustomMatch({...customMatch, time: e.target.value})} className="bg-white border border-yellow-200 rounded-xl px-2 py-2 text-[10px] font-bold text-stone-700 outline-none">{TIMES.map(t => <option key={t} value={t}>{t}</option>)}</select>
-                       <input type="text" placeholder={isAdmin ? "Event Name..." : "Custom Location..."} value={customMatch.location} onChange={e => setCustomMatch({...customMatch, location: e.target.value})} className="flex-1 bg-white border border-yellow-200 rounded-xl px-3 py-2 text-[10px] font-bold text-stone-700 outline-none" />
+                       <select value={customMatch.time} onChange={e => setCustomMatch({...customMatch, time: e.target.value})} className="bg-white border border-yellow-200 rounded-xl px-2 py-2 text-[10px] font-bold text-stone-700 outline-none">{TIMES.map(t => <option key={`start-${t}`} value={t}>{t}</option>)}</select>
+                       {isAdmin && (
+                           <select value={customMatch.endTime} onChange={e => setCustomMatch({...customMatch, endTime: e.target.value})} className="bg-white border border-yellow-200 rounded-xl px-2 py-2 text-[10px] font-bold text-stone-700 outline-none">
+                               <option value="">End Time...</option>
+                               {TIMES.map(t => <option key={`end-${t}`} value={t}>{t}</option>)}
+                           </select>
+                       )}
+                       <input type="text" placeholder={isAdmin ? "Event Name..." : "Custom Location..."} value={customMatch.location} onChange={e => setCustomMatch({...customMatch, location: e.target.value})} className="flex-1 min-w-[150px] bg-white border border-yellow-200 rounded-xl px-3 py-2 text-[10px] font-bold text-stone-700 outline-none" />
+                       {isAdmin && (
+                           <>
+                           <select value={customMatch.eventType} onChange={e => setCustomMatch({...customMatch, eventType: e.target.value as any})} className="bg-white border border-yellow-200 rounded-xl px-2 py-2 text-[10px] font-bold text-stone-700 outline-none">
+                               <option value="Standard">Standard</option>
+                               <option value="Tournament">Tournament</option>
+                               <option value="Global Broadcast">Global Broadcast</option>
+                           </select>
+                           <div className="relative">
+                               <button 
+                                  onClick={() => setCourtSelectOpenBottom(!courtSelectOpenBottom)}
+                                  className="bg-white border border-yellow-200 rounded-xl px-3 py-2 text-[10px] font-bold text-stone-700 outline-none min-w-[120px] text-left flex justify-between items-center"
+                               >
+                                  <span className="truncate">{directorTargetCourts.length ? directorTargetCourts.join(', ') : 'Select Courts...'}</span>
+                                  <i className="fas fa-chevron-down ml-2 text-stone-400"></i>
+                               </button>
+                               
+                               {courtSelectOpenBottom && (
+                                   <div className="absolute bottom-full mb-1 left-0 w-48 bg-white border border-yellow-200 shadow-xl rounded-xl p-2 z-50 flex flex-col gap-1 max-h-48 overflow-y-auto">
+                                       <label className="flex items-center gap-2 text-[10px] font-bold text-stone-700 cursor-pointer p-1 hover:bg-yellow-50 rounded">
+                                           <input type="checkbox" checked={directorTargetCourts.includes('All')} onChange={e => {
+                                               if (e.target.checked) setDirectorTargetCourts(['All']);
+                                               else setDirectorTargetCourts([]);
+                                           }} />
+                                           All Courts
+                                       </label>
+                                       {availableCourts.map(c => (
+                                           <label key={`bottom-${c}`} className="flex items-center gap-2 text-[10px] font-bold text-stone-700 cursor-pointer p-1 hover:bg-yellow-50 rounded">
+                                               <input type="checkbox" checked={directorTargetCourts.includes(c)} onChange={e => {
+                                                   let next = [...directorTargetCourts];
+                                                   if (next.includes('All')) next = [];
+                                                   if (e.target.checked) next.push(c);
+                                                   else next = next.filter(x => x !== c);
+                                                   if (next.length === 0) next = ['All'];
+                                                   setDirectorTargetCourts(next);
+                                               }} />
+                                               {c}
+                                           </label>
+                                       ))}
+                                       {directorTargetCourts.filter(c => c !== 'All' && !availableCourts.includes(c)).map(c => (
+                                          <label key={`bottom-custom-${c}`} className="flex items-center gap-2 text-[10px] font-bold text-stone-700 cursor-pointer p-1 hover:bg-yellow-50 rounded">
+                                              <input type="checkbox" checked={directorTargetCourts.includes(c)} onChange={e => {
+                                                  let next = directorTargetCourts.filter(x => x !== c);
+                                                  if (next.length === 0) next = ['All'];
+                                                  setDirectorTargetCourts(next);
+                                              }} />
+                                              {c}
+                                          </label>
+                                      ))}
+                                       <button onClick={() => {
+                                            setPromptModal({
+                                               isOpen: true,
+                                               title: "Enter new court name:",
+                                               value: '',
+                                               onSubmit: (newCity) => {
+                                                   if (newCity && newCity.trim()) {
+                                                        const valid = newCity.trim();
+                                                        let next = [...directorTargetCourts];
+                                                        if (next.includes('All')) next = [];
+                                                        if (!next.includes(valid)) next.push(valid);
+                                                        setDirectorTargetCourts(next);
+                                                   }
+                                               }
+                                           });
+                                           setCourtSelectOpenBottom(false);
+                                       }} className="text-left text-[10px] font-black text-indigo-500 hover:text-indigo-600 p-1 mt-1 border-t border-stone-100">+ Add More...</button>
+                                   </div>
+                               )}
+                           </div>
+                           </>
+                       )}
                     </div>
-                    <button onClick={handleAddCustomMatch} className="bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-[10px] font-black px-4 py-2 rounded-xl uppercase tracking-widest shadow-sm">{isAdmin ? 'Broadcast' : 'Add Match'}</button>
+                    <button onClick={handleAddCustomMatch} className="w-full xl:w-auto bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-[10px] font-black px-6 py-2 rounded-xl uppercase tracking-widest shadow-sm shrink-0">{isAdmin ? 'Broadcast' : 'Add Match'}</button>
                  </div>
               </div>
             )}

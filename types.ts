@@ -35,8 +35,10 @@ export interface HotSession {
   level: string;
   skillGroup: SkillGroup;
   sessionType: string; // e.g. "Mix", "Men", "Women"
+  eventType?: 'Standard' | 'Tournament' | 'Global Broadcast'; // New field for distinguishing event types
   day: string;
   time: string;
+  endTime?: string;
   needed: number;
   duration: number;
   description?: string;

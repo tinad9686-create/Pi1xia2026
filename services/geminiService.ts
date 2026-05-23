@@ -12,30 +12,19 @@ const getGenAI = () => {
           body: JSON.stringify(params)
         });
         
-        let data;
         const text = await response.text();
-        try {
-          data = JSON.parse(text);
-        } catch (e) {
-          throw new Error(response.ok ? "Invalid JSON from server" : text);
-        }
         
         if (!response.ok) {
-          throw new Error(data?.error?.message || data?.error || text || "Generation failed");
+          throw new Error(text || "Generation failed");
         }
         
-        // Add a .text property to mimic the SDK's response
-        if (data && data.candidates && data.candidates.length > 0 && data.candidates[0].content && data.candidates[0].content.parts) {
-          let text = '';
-          for (const part of data.candidates[0].content.parts) {
-            if (part.text) text += part.text;
-          }
-          data.text = text;
-        } else {
-          data.text = '';
-        }
-        
-        return data;
+        // Since the server streams the raw generated text, we just return it wrapped in an object
+        // with a .text property to mimic the text response of GenerateContentResponse.
+        return { 
+          text: text,
+          // Add dummy candidates for any legacy code expecting it
+          candidates: [{ content: { parts: [{ text: text }] } }] as any
+        };
       }
     }
   };

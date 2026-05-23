@@ -290,7 +290,6 @@ const App: React.FC = () => {
   }, []);
 
   const [theme, setTheme] = useState<Theme>('sunny');
-  const [language, setLanguage] = useState<'EN' | 'CN'>('EN');
   const [quote, setQuote] = useState('');
   
   // Admin Secret Trigger State
@@ -482,54 +481,28 @@ const App: React.FC = () => {
     }
   };
 
-  const translations = {
-    EN: {
-      welcome: "Welcome",
-      home: "Home",
-      eval: "Eval",
-      match: "Match",
-      stats: "Stats",
-      account: "Account",
-      aiSkillSync: "AI Skill Sync",
-      aiSkillSyncDesc: "Leverage Gemini AI for advanced mechanical skill assessment.",
-      localRadar: "Local Radar",
-      localRadarDesc: "Discover compatible partners in your neighborhood.",
-      signIn: "Sign In",
-      register: "Register",
-      subHeader: "AI-powered performance analysis and tracking for serious players to find partners.",
-      hotSessions: "Hot Sessions",
-      needed: "needed",
-      join: "Join",
-      activeAlarm: "Match Alarm Active!",
-      alarmDesc: "Your game starts in less than 24 hours. Be ready!",
-      urgentAlarm: "URGENT: COURT TIME SOON!",
-      startsIn: "Game starts in:",
-    },
-    CN: {
-      welcome: "欢迎",
-      home: "首页",
-      eval: "技能评估",
-      match: "伙伴匹配",
-      stats: "数据统计",
-      account: "账户",
-      aiSkillSync: "AI 技能同步",
-      aiSkillSyncDesc: "利用 Gemini AI 进行先进的机械技能评估。",
-      localRadar: "本地雷达",
-      localRadarDesc: "发现您附近的兼容伙伴。",
-      signIn: "登录",
-      register: "注册",
-      subHeader: "同级别匹配，精准 AI 分析",
-      hotSessions: "火热场次",
-      needed: "人空缺",
-      join: "加入",
-      activeAlarm: "比赛闹钟激活！",
-      alarmDesc: "您的比赛将在 24 小时内开始。准备好！",
-      urgentAlarm: "紧急：比赛即将开始！",
-      startsIn: "比赛倒计时：",
-    }
+  const t = {
+    welcome: "Welcome",
+    home: "Home",
+    eval: "Eval",
+    match: "Match",
+    stats: "Stats",
+    account: "Account",
+    aiSkillSync: "AI Skill Sync",
+    aiSkillSyncDesc: "Leverage Gemini AI for advanced mechanical skill assessment.",
+    localRadar: "Local Radar",
+    localRadarDesc: "Discover compatible partners in your neighborhood.",
+    signIn: "Sign In",
+    register: "Register",
+    subHeader: "AI-powered performance analysis and tracking for serious players to find partners.",
+    hotSessions: "Hot Sessions",
+    needed: "needed",
+    join: "Join",
+    activeAlarm: "Match Alarm Active!",
+    alarmDesc: "Your game starts in less than 24 hours. Be ready!",
+    urgentAlarm: "URGENT: COURT TIME SOON!",
+    startsIn: "Game starts in:",
   };
-
-  const t = translations[language];
 
   const searchResults = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -543,10 +516,6 @@ const App: React.FC = () => {
     setActiveTab('Matchmaking');
     setSearchQuery('');
     setIsSearchFocused(false);
-  };
-
-  const toggleLanguage = () => {
-    setLanguage(prev => prev === 'EN' ? 'CN' : 'EN');
   };
 
   const cycleTheme = () => {
@@ -697,7 +666,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDirectorBroadcast = async (day: number, time: string, text: string, location: string) => {
+  const handleDirectorBroadcast = async (day: number, time: string, text: string, location: string, endTime?: string, eventType: 'Standard' | 'Tournament' | 'Global Broadcast' = 'Standard') => {
     const match = text.match(/^(.*?) need (\d+),?\s*(.*)$/i);
     let description = text;
     let needed = 4;
@@ -710,14 +679,16 @@ const App: React.FC = () => {
     }
 
     const session: Omit<HotSession, 'id'> = {
-        city: location.split(' ')[0], 
+        city: location.includes(',') ? 'Multi' : location.split(' ')[0], 
         location: location,
-        shortLocation: location.substring(0, 15),
+        shortLocation: location.length > 25 ? location.substring(0, 25) + '...' : location,
         level: notes.includes('group 3') ? '4.0' : '3.0',
+        eventType: eventType,
         skillGroup: notes.includes('group 3') ? SkillGroup.GROUP_3 : SkillGroup.GROUP_2,
         sessionType: 'Broadcast',
         day: DAYS[day],
         time: time,
+        endTime: endTime,
         needed: needed,
         duration: 2,
         createdBy: 'Director',
@@ -999,9 +970,6 @@ const App: React.FC = () => {
                Dashboard
             </button>
           )}
-          <button onClick={toggleLanguage} className={`px-2 py-1 md:px-3 md:py-2 rounded-xl text-[9px] md:text-[10px] font-black tracking-widest transition-all border-2 ${theme === 'sunny' ? 'bg-[#4A4238]/5 border-[#4A4238]/10 text-[#4A4238]' : theme === 'classic' ? 'bg-[#3B474C]/5 border-[#3B474C]/10 text-[#3B474C]' : 'bg-cyan-950/40 border-cyan-400/20 text-[#33FFFC]'}`}>
-            {language}
-          </button>
           <button onClick={cycleTheme} className={`w-9 h-9 md:w-11 md:h-11 rounded-2xl flex items-center justify-center transition-all border-2 ${theme === 'sunny' ? 'bg-[#4A4238]/5 border-[#4A4238]/10 text-[#C4A45C]' : theme === 'classic' ? 'bg-[#3B474C]/5 border-[#3B474C]/10 text-[#8EA3A6]' : 'bg-cyan-950/40 border-cyan-400/20 text-[#33FFFC]'}`}>
             <i className={`fas ${theme === 'sunny' ? 'fa-sun' : theme === 'classic' ? 'fa-eye' : 'fa-wave-square'} text-lg md:text-xl`}></i>
           </button>
@@ -1052,7 +1020,57 @@ const App: React.FC = () => {
               </div>
             </div>
 
-            <Pi1xiaBottomBanner onClick={() => setActiveTab('Game')} />
+            {userProfile.isAdmin && (
+              <Pi1xiaBottomBanner onClick={() => setActiveTab('Game')} />
+            )}
+
+            {hotSessions.filter(hs => hs.eventType === 'Global Broadcast' || hs.eventType === 'Tournament').length > 0 && (
+              <div className="mb-8">
+                 <div className="flex items-center px-2 mb-4">
+                   <h3 className={`text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 ${theme === 'sunny' ? 'text-indigo-600' : 'text-indigo-400'}`}>
+                      <i className="fas fa-bullhorn animate-pulse"></i> Global Announcements
+                   </h3>
+                 </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {hotSessions.filter(hs => hs.eventType === 'Global Broadcast' || hs.eventType === 'Tournament').map(session => (
+                        <div key={session.id} className={`p-6 rounded-[2rem] border shadow-xl relative overflow-hidden flex flex-col justify-between ${theme === 'dark' ? 'bg-indigo-950/20 border-indigo-500/20 text-indigo-50' : 'bg-indigo-50/50 border-indigo-100'}`}>
+                           <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500"></div>
+                           <div className="flex justify-between items-start mb-4">
+                             <div className="flex flex-col">
+                                <span className={`text-[10px] font-black uppercase tracking-widest ${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-600'}`}>{session.eventType}</span>
+                                <span className={`text-[14px] font-black mt-1 ${theme === 'dark' ? 'text-white' : 'text-indigo-950'}`}>{session.location === 'All' ? 'All Courts' : session.location}</span>
+                             </div>
+                             <div className={`px-3 py-1.5 rounded-xl shadow-sm border flex flex-col items-end ${theme === 'dark' ? 'bg-indigo-950/50 border-indigo-500/30' : 'bg-white border-indigo-100'}`}>
+                                <span className={`text-[12px] font-black ${theme === 'dark' ? 'text-indigo-300' : 'text-indigo-800'}`}>{session.day}</span>
+                                <span className={`text-[10px] font-bold ${theme === 'dark' ? 'text-indigo-400/70' : 'text-stone-500'}`}>{session.time}{session.endTime ? ` - ${session.endTime}` : ''}</span>
+                             </div>
+                           </div>
+                           <p className={`text-[12px] font-black mb-6 ${theme === 'dark' ? 'text-indigo-200' : 'text-stone-600'}`}>{session.description}</p>
+                           <div className="flex justify-between items-center mt-auto">
+                              <span className={`text-[10px] font-bold flex items-center gap-1.5 ${theme === 'dark' ? 'text-indigo-400/50' : 'text-stone-400'}`}><i className="fas fa-users text-indigo-400/50"></i> {session.participants?.length || 0} Joined</span>
+                              
+                              <div className="flex items-center gap-2">
+                                  {userProfile.isAdmin && (
+                                     <button onClick={() => {
+                                         if (window.confirm("Delete this global event?")) {
+                                            setHotSessions(hotSessions.filter(hs => hs.id !== session.id));
+                                         }
+                                     }} className="w-8 h-8 rounded-full bg-red-100 text-red-500 flex items-center justify-center hover:bg-red-200 transition-colors">
+                                        <i className="fas fa-trash text-[10px]"></i>
+                                     </button>
+                                  )}
+                                  {!session.participants?.includes(userProfile.id) ? (
+                                      <button onClick={() => handleJoinHotSession(session.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-black px-6 py-2.5 rounded-xl uppercase tracking-widest shadow-md transition-all hover:scale-105">Join</button>
+                                   ) : (
+                                      <span className="bg-emerald-100 text-emerald-700 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest">Joined</span>
+                                   )}
+                              </div>
+                           </div>
+                        </div>
+                    ))}
+                 </div>
+              </div>
+            )}
 
             <div className="space-y-6">
               <div className="flex items-center justify-between px-2">
@@ -1062,8 +1080,14 @@ const App: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {hotSessions
                   .filter(session => {
+                      if (session.eventType === 'Global Broadcast' || session.eventType === 'Tournament') return false;
                       if (userProfile.isAdmin) return true;
-                      if (!userProfile.locations.includes(session.location) && session.sessionType !== 'Group Event') return false;
+                      const sessionLocs = session.location.split(',').map(s=>s.trim().toLowerCase());
+                      const isTargetMatch = sessionLocs.includes('all') || 
+                                            userProfile.locations.some(userLoc => 
+                                                sessionLocs.some(sl => sl === userLoc.toLowerCase() || userLoc.toLowerCase().includes(sl))
+                                            );
+                      if (!isTargetMatch && session.sessionType !== 'Group Event') return false;
                       if (session.participants && session.participants.includes(userProfile.id)) return false;
                       if (session.needed <= 0) return false;
                       if (session.isManuallyConfirmed && session.sessionType !== 'Group Event') return false;
@@ -1076,7 +1100,7 @@ const App: React.FC = () => {
                     <div className="absolute top-0 left-0 w-1 h-full bg-orange-400"></div>
                     <div className="flex justify-between items-start mb-4">
                       <span className="text-[10px] font-black uppercase text-orange-500">{session.city}</span>
-                      <span className="text-[10px] font-black text-stone-400">{session.day} {session.time} <span className="text-stone-300 mx-1">•</span> {session.duration}h</span>
+                      <span className="text-[10px] font-black text-stone-400">{session.day} {session.time}{session.endTime ? ` - ${session.endTime}` : ''} <span className="text-stone-300 mx-1">•</span> {session.duration}h</span>
                     </div>
                     <h4 className="font-black uppercase text-sm mb-1 truncate">{session.location}</h4>
                     <p className="text-[9px] font-bold text-stone-400 uppercase tracking-widest mb-6 flex items-center gap-1">{session.description || session.skillGroup} {session.isFlexible && <span className="text-lime-500 font-bold ml-1">(Flex)</span>}</p>
@@ -1161,7 +1185,7 @@ const App: React.FC = () => {
             allPlayers={allPlayers}
           />
         )}
-        {activeTab === 'Game' && (
+        {activeTab === 'Game' && userProfile.isAdmin && (
           <BentoIQGame />
         )}
         {activeTab === 'Account' && (
@@ -1193,7 +1217,9 @@ const App: React.FC = () => {
         <NavButton icon="fa-home" label={t.home} active={activeTab === 'Home'} onClick={() => setActiveTab('Home')} theme={theme} />
         <NavButton icon="fa-award" label={t.eval} active={activeTab === 'Evaluation'} onClick={() => setActiveTab('Evaluation')} theme={theme} />
         <NavButton icon="fa-users" label={t.match} active={activeTab === 'Matchmaking'} onClick={() => setActiveTab('Matchmaking')} theme={theme} />
-        <NavButton icon="fa-gamepad" label="Game" active={activeTab === 'Game'} onClick={() => setActiveTab('Game')} theme={theme} />
+        {userProfile.isAdmin && (
+          <NavButton icon="fa-gamepad" label="Game" active={activeTab === 'Game'} onClick={() => setActiveTab('Game')} theme={theme} />
+        )}
         <NavButton icon="fa-chart-pie" label={t.stats} active={activeTab === 'Stats'} onClick={() => setActiveTab('Stats')} theme={theme} />
         <NavButton icon="fa-user" label={t.account} active={activeTab === 'Account'} onClick={() => setActiveTab('Account')} theme={theme} />
       </div>
